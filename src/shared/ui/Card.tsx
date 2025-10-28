@@ -10,7 +10,10 @@ interface CardProps {
 export const Card = ({ children, className, onClick }: CardProps) => {
   return (
     <div
-      className={cn('border rounded-lg p-4 bg-white', className)}
+      className={cn(
+        'border rounded-lg p-4 bg-white dark:bg-gray-800 dark:border-gray-700',
+        className
+      )}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}

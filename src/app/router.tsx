@@ -1,19 +1,37 @@
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
-import { HomePage } from '@/features/habits/components/HomePage';
-import { Layout } from '@/shared/ui/Layout';
+import { createBrowserRouter } from 'react-router-dom';
+import { App } from './App';
+import { HabitListPage } from '@/features/habits/pages/List';
+import { NewHabitPage } from '@/features/habits/pages/New';
+import { HabitDetailPage } from '@/features/habits/pages/Detail';
+import { StatsPage } from '@/features/habits/pages/Stats';
+import { NotFoundPage } from '@/features/habits/pages/NotFound';
 
-const router = createBrowserRouter([
+export const router = createBrowserRouter([
   {
     path: '/',
-    element: <Layout />,
+    element: <App />,
     children: [
       {
         index: true,
-        element: <HomePage />
-      }
-    ]
-  }
+        element: <HabitListPage />,
+      },
+      {
+        path: 'habit/new',
+        element: <NewHabitPage />,
+      },
+      {
+        path: 'habit/:id',
+        element: <HabitDetailPage />,
+      },
+      {
+        path: 'stats',
+        element: <StatsPage />,
+      },
+      {
+        path: '*',
+        element: <NotFoundPage />,
+      },
+    ],
+  },
 ]);
-
-export const AppRouter = () => <RouterProvider router={router} />;
 
