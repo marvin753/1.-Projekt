@@ -6,7 +6,10 @@
       "Bash(npm run build:*)",
       "Bash(npm run test:*)",
       "Bash(npm run test:ci:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npm test:*)",
+      "Bash(node -e:*)",
+      "Read(//private/var/folders/z4/8kynfgwn1hdd8yvk4d4245bw0000gn/T/**)"
     ],
     "deny": [],
     "ask": []

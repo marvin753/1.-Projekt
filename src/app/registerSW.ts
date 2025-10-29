@@ -1,23 +1,41 @@
-import { registerSW } from 'virtual:pwa-register';
+export const registerServiceWorker = async () => {
+  // Check if service workers are supported
+  if (!('serviceWorker' in navigator)) {
+    console.warn('Service workers are not supported');
+    return null;
+  }
 
-export const registerServiceWorker = () => {
-  const updateSW = registerSW({
-    immediate: true,
-    onNeedRefresh() {
-      console.log('Update available');
-    },
-    onOfflineReady() {
-      console.log('App ready to work offline');
-    },
-    onRegistered() {
-      console.log('Service Worker registered');
-    },
-    onRegisterError(error) {
-      console.error('Service Worker registration error:', error);
-    }
-  });
+  try {
+    console.log('Starting Service Worker registration...');
 
-  return updateSW;
+    // Unregister any existing service workers
+    const existingRegistrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(
+      existingRegistrations.map((reg: ServiceWorkerRegistration) => reg.unregister())
+    );
+
+    // Register new service worker
+    const registration = await navigator.serviceWorker.register('/sw.js', {
+      scope: '/',
+      updateViaCache: 'none'
+    });
+
+    console.log('Service Worker registered successfully', registration);
+
+    // Check for updates periodically
+    setInterval(() => {
+      registration.update();
+    }, 60000); // Check every minute
+
+    return registration;
+
+  } catch (error) {
+    console.error(
+      'Failed to register Service Worker:',
+      error instanceof Error ? error.message : String(error)
+    );
+    return null;
+  }
 };
 
 

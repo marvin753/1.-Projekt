@@ -1,0 +1,516 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { useHabitsStore, makeDateKeyUTC } from '@/features/habits/useHabitsStore';
+
+/**
+ * Unit tests for Habits Store and related utilities
+ */
+describe('Habits Store', () => {
+  // Clear store state before each test
+  beforeEach(() => {
+    useHabitsStore.setState({ habits: [], loading: false });
+  });
+
+  afterEach(() => {
+    useHabitsStore.setState({ habits: [], loading: false });
+  });
+
+  describe('makeDateKeyUTC', () => {
+    it('should format a date to YYYY-MM-DD in UTC', () => {
+      const date = new Date('2024-10-29T15:30:00Z');
+      const key = makeDateKeyUTC(date);
+      expect(key).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(key).toBe('2024-10-29');
+    });
+
+    it('should handle dates with different timezones correctly', () => {
+      // Create a date that's midnight UTC
+      const utcDate = new Date('2024-10-29T00:00:00Z');
+      const key = makeDateKeyUTC(utcDate);
+      expect(key).toBe('2024-10-29');
+    });
+
+    it('should handle year boundaries', () => {
+      const newYearEve = new Date('2024-12-31T23:59:59Z');
+      const key = makeDateKeyUTC(newYearEve);
+      expect(key).toBe('2024-12-31');
+    });
+
+    it('should handle leap year dates', () => {
+      const leapDay = new Date('2024-02-29T12:00:00Z');
+      const key = makeDateKeyUTC(leapDay);
+      expect(key).toBe('2024-02-29');
+    });
+  });
+
+  describe('store.create', () => {
+    it('should create a new habit with auto-generated ID and timestamps', async () => {
+      const store = useHabitsStore.getState();
+      const input = {
+        title: 'Exercise',
+        description: 'Daily workout',
+        weeklyTarget: 5
+      };
+
+      const habit = await store.create(input);
+
+      expect(habit.id).toBeTruthy();
+      expect(habit.title).toBe('Exercise');
+      expect(habit.description).toBe('Daily workout');
+      expect(habit.weeklyTarget).toBe(5);
+      expect(habit.createdAt).toBeTruthy();
+      expect(habit.updatedAt).toBeTruthy();
+      expect(habit.checks).toEqual({});
+      // Check ISO format
+      expect(() => new Date(habit.createdAt)).not.toThrow();
+      expect(() => new Date(habit.updatedAt)).not.toThrow();
+    });
+
+    it('should add the habit to the state', async () => {
+      const store = useHabitsStore.getState();
+      const input = {
+        title: 'Reading',
+        weeklyTarget: 3
+      };
+
+      const habit = await store.create(input);
+      const state = useHabitsStore.getState();
+
+      expect(state.habits).toHaveLength(1);
+      expect(state.habits[0]).toEqual(habit);
+    });
+
+    it('should handle optional description', async () => {
+      const store = useHabitsStore.getState();
+      const input = {
+        title: 'Meditation',
+        weeklyTarget: 7
+      };
+
+      const habit = await store.create(input);
+
+      expect(habit.description).toBeUndefined();
+    });
+
+    it('should validate weeklyTarget range (1-7)', async () => {
+      const store = useHabitsStore.getState();
+
+      // Valid: minimum
+      const habit1 = await store.create({
+        title: 'Test',
+        weeklyTarget: 1
+      });
+      expect(habit1.weeklyTarget).toBe(1);
+
+      // Valid: maximum
+      const habit2 = await store.create({
+        title: 'Test 2',
+        weeklyTarget: 7
+      });
+      expect(habit2.weeklyTarget).toBe(7);
+
+      // Invalid: below minimum
+      await expect(
+        store.create({
+          title: 'Invalid',
+          weeklyTarget: 0
+        })
+      ).rejects.toThrow();
+
+      // Invalid: above maximum
+      await expect(
+        store.create({
+          title: 'Invalid',
+          weeklyTarget: 8
+        })
+      ).rejects.toThrow();
+    });
+
+    it('should create multiple habits independently', async () => {
+      const store = useHabitsStore.getState();
+
+      await store.create({
+        title: 'Habit 1',
+        weeklyTarget: 3
+      });
+      await store.create({
+        title: 'Habit 2',
+        weeklyTarget: 5
+      });
+
+      const state = useHabitsStore.getState();
+      expect(state.habits).toHaveLength(2);
+      expect(state.habits[0].id).not.toBe(state.habits[1].id);
+    });
+  });
+
+  describe('store.update', () => {
+    let habitId: string;
+
+    beforeEach(async () => {
+      const store = useHabitsStore.getState();
+      const habit = await store.create({
+        title: 'Original',
+        description: 'Original description',
+        weeklyTarget: 3
+      });
+      habitId = habit.id;
+    });
+
+    it('should update habit title', async () => {
+      const store = useHabitsStore.getState();
+      await await store.update(habitId, { title: 'Updated' });
+
+      const habit = useHabitsStore.getState().habits[0];
+      expect(habit.title).toBe('Updated');
+      expect(habit.updatedAt).not.toBe(habit.createdAt);
+    });
+
+    it('should update habit description', async, () => {
+      const store = useHabitsStore.getState();
+      await store.update(habitId, { description: 'New description' });
+
+      const habit = useHabitsStore.getState().habits[0];
+      expect(habit.description).toBe('New description');
+    });
+
+    it('should update weeklyTarget', async, () => {
+      const store = useHabitsStore.getState();
+      await store.update(habitId, { weeklyTarget: 6 });
+
+      const habit = useHabitsStore.getState().habits[0];
+      expect(habit.weeklyTarget).toBe(6);
+    });
+
+    it('should update multiple fields at once', () => {
+      const store = useHabitsStore.getState();
+      await store.update(habitId, {
+        title: 'New Title',
+        weeklyTarget: 7,
+        description: 'New description'
+      });
+
+      const habit = useHabitsStore.getState().habits[0];
+      expect(habit.title).toBe('New Title');
+      expect(habit.weeklyTarget).toBe(7);
+      expect(habit.description).toBe('New description');
+    });
+
+    it('should update updatedAt timestamp', () => {
+      const originalUpdatedAt = useHabitsStore.getState().habits[0].updatedAt;
+
+      const store = useHabitsStore.getState();
+      await store.update(habitId, { title: 'Updated' });
+
+      const habit = useHabitsStore.getState().habits[0];
+      expect(new Date(habit.updatedAt).getTime()).toBeGreaterThanOrEqual(new Date(originalUpdatedAt).getTime());
+    });
+
+    it('should not update non-existent habit', () => {
+      const store = useHabitsStore.getState();
+      const originalHabit = useHabitsStore.getState().habits[0];
+
+      await store.update('non-existent-id', { title: 'New Title' });
+
+      const habit = useHabitsStore.getState().habits[0];
+      expect(habit.title).toBe(originalHabit.title);
+    });
+
+    it('should preserve other fields when updating', () => {
+      const store = useHabitsStore.getState();
+      const original = useHabitsStore.getState().habits[0];
+
+      await store.update(habitId, { title: 'New Title' });
+
+      const habit = useHabitsStore.getState().habits[0];
+      expect(habit.weeklyTarget).toBe(original.weeklyTarget);
+      expect(habit.checks).toEqual(original.checks);
+      expect(habit.createdAt).toBe(original.createdAt);
+    });
+
+    it('should validate weeklyTarget on update', () => {
+      const store = useHabitsStore.getState();
+
+      expect(() =>
+        await store.update(habitId, { weeklyTarget: 10 })
+      ).toThrow();
+    });
+  });
+
+  describe('store.remove', () => {
+    let habit1Id: string;
+    let habit2Id: string;
+
+    beforeEach(() => {
+      const store = useHabitsStore.getState();
+      const habit1 = store.create({
+        title: 'Habit 1',
+        weeklyTarget: 3
+      });
+      const habit2 = store.create({
+        title: 'Habit 2',
+        weeklyTarget: 5
+      });
+      habit1Id = habit1.id;
+      habit2Id = habit2.id;
+    });
+
+    it('should remove a habit by ID', () => {
+      const store = useHabitsStore.getState();
+      await store.remove(habit1Id);
+
+      const state = useHabitsStore.getState();
+      expect(state.habits).toHaveLength(1);
+      expect(state.habits[0].id).toBe(habit2Id);
+    });
+
+    it('should handle removing non-existent habit gracefully', () => {
+      const store = useHabitsStore.getState();
+      const originalLength = useHabitsStore.getState().habits.length;
+
+      await store.remove('non-existent-id');
+
+      const state = useHabitsStore.getState();
+      expect(state.habits).toHaveLength(originalLength);
+    });
+
+    it('should remove all habits if called multiple times', () => {
+      const store = useHabitsStore.getState();
+      await store.remove(habit1Id);
+      await store.remove(habit2Id);
+
+      const state = useHabitsStore.getState();
+      expect(state.habits).toHaveLength(0);
+    });
+  });
+
+  describe('store.toggleCheck', () => {
+    let habitId: string;
+
+    beforeEach(() => {
+      const store = useHabitsStore.getState();
+      const habit = store.create({
+        title: 'Daily Task',
+        weeklyTarget: 7
+      });
+      habitId = habit.id;
+    });
+
+    it('should add a check when toggling non-existent date', () => {
+      const store = useHabitsStore.getState();
+      const dateKey = makeDateKeyUTC(new Date('2024-10-29'));
+
+      await store.toggleCheck(habitId, dateKey);
+
+      const habit = useHabitsStore.getState().habits[0];
+      expect(habit.checks[dateKey]).toBe(true);
+    });
+
+    it('should toggle check from false to true', () => {
+      const store = useHabitsStore.getState();
+      const dateKey = '2024-10-29';
+
+      // Set initial state
+      useHabitsStore.setState((state) => ({
+        habits: state.habits.map((h) =>
+          h.id === habitId ? { ...h, checks: { [dateKey]: false } } : h
+        )
+      }));
+
+      await store.toggleCheck(habitId, dateKey);
+
+      const habit = useHabitsStore.getState().habits[0];
+      expect(habit.checks[dateKey]).toBe(true);
+    });
+
+    it('should toggle check from true to false', () => {
+      const store = useHabitsStore.getState();
+      const dateKey = '2024-10-29';
+
+      // Set initial state
+      useHabitsStore.setState((state) => ({
+        habits: state.habits.map((h) =>
+          h.id === habitId ? { ...h, checks: { [dateKey]: true } } : h
+        )
+      }));
+
+      await store.toggleCheck(habitId, dateKey);
+
+      const habit = useHabitsStore.getState().habits[0];
+      expect(habit.checks[dateKey]).toBe(false);
+    });
+
+    it('should preserve other checks when toggling', () => {
+      const store = useHabitsStore.getState();
+      const dateKey1 = '2024-10-29';
+      const dateKey2 = '2024-10-30';
+
+      // Set initial state
+      useHabitsStore.setState((state) => ({
+        habits: state.habits.map((h) =>
+          h.id === habitId
+            ? {
+                ...h,
+                checks: { [dateKey1]: true, [dateKey2]: false }
+              }
+            : h
+        )
+      }));
+
+      await store.toggleCheck(habitId, dateKey1);
+
+      const habit = useHabitsStore.getState().habits[0];
+      expect(habit.checks[dateKey1]).toBe(false);
+      expect(habit.checks[dateKey2]).toBe(false);
+    });
+
+    it('should update updatedAt timestamp on toggle', () => {
+      const store = useHabitsStore.getState();
+      const originalUpdatedAt = useHabitsStore.getState().habits[0].updatedAt;
+      const dateKey = '2024-10-29';
+
+      await store.toggleCheck(habitId, dateKey);
+
+      const habit = useHabitsStore.getState().habits[0];
+      expect(new Date(habit.updatedAt).getTime()).toBeGreaterThanOrEqual(new Date(originalUpdatedAt).getTime());
+    });
+
+    it('should validate date key format (YYYY-MM-DD)', () => {
+      const store = useHabitsStore.getState();
+
+      // Invalid format
+      expect(() =>
+        await store.toggleCheck(habitId, '2024/10/29')
+      ).toThrow('Invalid date key format');
+
+      expect(() =>
+        await store.toggleCheck(habitId, '10-29-2024')
+      ).toThrow('Invalid date key format');
+
+      expect(() =>
+        await store.toggleCheck(habitId, 'invalid')
+      ).toThrow('Invalid date key format');
+    });
+
+    it('should validate date keys are stored correctly in UTC format', () => {
+      const store = useHabitsStore.getState();
+      const today = new Date();
+      const dateKey = makeDateKeyUTC(today);
+
+      await store.toggleCheck(habitId, dateKey);
+
+      const habit = useHabitsStore.getState().habits[0];
+      expect(dateKey).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(habit.checks[dateKey]).toBe(true);
+    });
+
+    it('should handle multiple date keys for the same habit', () => {
+      const store = useHabitsStore.getState();
+      const dateKey1 = '2024-10-28';
+      const dateKey2 = '2024-10-29';
+      const dateKey3 = '2024-10-30';
+
+      await store.toggleCheck(habitId, dateKey1);
+      await store.toggleCheck(habitId, dateKey2);
+      await store.toggleCheck(habitId, dateKey3);
+
+      const habit = useHabitsStore.getState().habits[0];
+      expect(Object.keys(habit.checks)).toHaveLength(3);
+      expect(habit.checks[dateKey1]).toBe(true);
+      expect(habit.checks[dateKey2]).toBe(true);
+      expect(habit.checks[dateKey3]).toBe(true);
+    });
+
+    it('should not affect other habits when toggling', () => {
+      const store = useHabitsStore.getState();
+      const habit2 = store.create({
+        title: 'Another Habit',
+        weeklyTarget: 3
+      });
+      const dateKey = '2024-10-29';
+
+      await store.toggleCheck(habitId, dateKey);
+
+      const state = useHabitsStore.getState();
+      const updatedHabit1 = state.habits.find((h) => h.id === habitId);
+      const updatedHabit2 = state.habits.find((h) => h.id === habit2.id);
+
+      expect(updatedHabit1?.checks[dateKey]).toBe(true);
+      expect(Object.keys(updatedHabit2?.checks ?? {})).toHaveLength(0);
+    });
+  });
+
+  describe('Integration tests', () => {
+    it('should handle a complete workflow', () => {
+      const store = useHabitsStore.getState();
+
+      // Create a habit
+      const habit = store.create({
+        title: 'Exercise',
+        description: 'Daily workout routine',
+        weeklyTarget: 5
+      });
+      expect(useHabitsStore.getState().habits).toHaveLength(1);
+
+      // Update the habit
+      await store.update(habit.id, { description: 'Updated routine' });
+      let updated = useHabitsStore.getState().habits[0];
+      expect(updated.description).toBe('Updated routine');
+
+      // Add checks for multiple days
+      const today = new Date();
+      const dateKey1 = makeDateKeyUTC(today);
+      const dateKey2 = makeDateKeyUTC(
+        new Date(today.getTime() - 86400000) // yesterday
+      );
+
+      await store.toggleCheck(habit.id, dateKey1);
+      await store.toggleCheck(habit.id, dateKey2);
+
+      updated = useHabitsStore.getState().habits[0];
+      expect(updated.checks[dateKey1]).toBe(true);
+      expect(updated.checks[dateKey2]).toBe(true);
+
+      // Toggle a check back
+      await store.toggleCheck(habit.id, dateKey1);
+      updated = useHabitsStore.getState().habits[0];
+      expect(updated.checks[dateKey1]).toBe(false);
+      expect(updated.checks[dateKey2]).toBe(true);
+
+      // Remove the habit
+      await store.remove(habit.id);
+      expect(useHabitsStore.getState().habits).toHaveLength(0);
+    });
+
+    it('should maintain data consistency across operations', () => {
+      const store = useHabitsStore.getState();
+
+      const habit1 = store.create({
+        title: 'Habit 1',
+        weeklyTarget: 3
+      });
+      const habit2 = store.create({
+        title: 'Habit 2',
+        weeklyTarget: 5
+      });
+
+      // Perform various operations
+      await store.update(habit1.id, { title: 'Updated Habit 1' });
+      await store.toggleCheck(habit1.id, '2024-10-29');
+      await store.update(habit2.id, { weeklyTarget: 6 });
+      await store.toggleCheck(habit2.id, '2024-10-29');
+      await store.toggleCheck(habit2.id, '2024-10-30');
+
+      const state = useHabitsStore.getState();
+      expect(state.habits).toHaveLength(2);
+
+      const h1 = state.habits.find((h) => h.id === habit1.id);
+      expect(h1?.title).toBe('Updated Habit 1');
+      expect(h1?.checks['2024-10-29']).toBe(true);
+
+      const h2 = state.habits.find((h) => h.id === habit2.id);
+      expect(h2?.weeklyTarget).toBe(6);
+      expect(h2?.checks['2024-10-29']).toBe(true);
+      expect(h2?.checks['2024-10-30']).toBe(true);
+    });
+  });
+});
